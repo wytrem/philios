@@ -15,6 +15,9 @@ import net.wytrem.spigot.utils.text.Text;
 import net.wytrem.spigot.utils.text.TextsRegistry;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -25,8 +28,9 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-public class Philios extends WyPlugin {
+public class Philios extends WyPlugin implements Listener {
 
     public static final String DELIMITER_IN_SAVED_FILE = " <-> ";
     public static Philios instance;
@@ -36,13 +40,19 @@ public class Philios extends WyPlugin {
     private Table<UUID, UUID, Boolean> friendshipTable;
     private Command removeCommand;
 
+    // --- Config
+    private boolean sendOnPlayerJoin;
+
     @Override
     public void onEnable() {
         instance = this;
         super.onEnable();
 
+        // Texts
         this.texts = new Texts(this.i18n);
-        this.friendshipTable = HashBasedTable.create();
+
+        // Events
+        this.registerEvents(this);
 
         // Offers
         this.offers = new FriendOffersManager(this);
@@ -63,11 +73,16 @@ public class Philios extends WyPlugin {
         this.commands.register(command, "friend");
 
         // Load saved data
+        this.friendshipTable = HashBasedTable.create();
+
         try {
             this.loadSavedData();
         } catch (IOException e) {
             this.getLogger().log(Level.WARNING, "Could not read saved friendships.", e);
         }
+
+        // Load config
+        this.sendOnPlayerJoin = this.getConfig().getBoolean("sendOnPlayerJoin", true);
     }
 
     @Override
@@ -79,6 +94,13 @@ public class Philios extends WyPlugin {
             this.getLogger().log(Level.WARNING, "Could not save friendships.", e);
         }
         this.friendshipTable.clear();
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (this.sendOnPlayerJoin) {
+            this.sendOnlineFriends(event.getPlayer());
+        }
     }
 
     private void loadSavedData() throws IOException {
@@ -128,29 +150,37 @@ public class Philios extends WyPlugin {
     }
 
     protected void sendOnlineFriends(Player player) {
+        Collection<UUID> onlineFriends = this.getFriends(player).stream().filter(this::isOnline).collect(Collectors.toList());
 
-        this.texts.onlineFriends.send(player);
-        BaseComponent message = this.getFriends(player).stream()
-                .filter(this::isOnline)
-                .map(friend -> this.buildFriend(getDisplayName(friend), friend))
-                .collect(ChatComponents.joining(", "));
+        if (onlineFriends.isEmpty()) {
+            this.texts.youHaveNoOnlineFriends.send(player);
+        }
+        else {
+            this.texts.onlineFriends.send(player);
 
-        message.addExtra(new TextComponent(ChatColor.GRAY + "."));
+            BaseComponent[] message = onlineFriends.stream()
+                    .map(friend -> this.buildFriend(getDisplayName(friend), friend))
+                    .collect(ChatComponentJoiner.joining(", ", null, "."));
 
-        player.spigot().sendMessage(message);
+            player.spigot().sendMessage(message);
+        }
     }
 
     protected void sendOfflineFriends(Player player) {
+        Collection<UUID> offlineFriends = this.getFriends(player).stream().filter(x -> !this.isOnline(x)).collect(Collectors.toList());
 
-        this.texts.offlineFriends.send(player);
-        BaseComponent message = this.getFriends(player).stream()
-                .filter(uuid -> !this.isOnline(uuid))
-                .map(friend -> this.buildFriend(getDisplayName(friend), friend))
-                .collect(ChatComponents.joining(", "));
+        if (offlineFriends.isEmpty()) {
+            this.texts.youHaveNoOfflineFriends.send(player);
+        }
+        else {
+            this.texts.offlineFriends.send(player);
 
-        message.addExtra(new TextComponent(ChatColor.GRAY + "."));
+            BaseComponent[] message = offlineFriends.stream()
+                    .map(friend -> this.buildFriend(getDisplayName(friend), friend))
+                    .collect(ChatComponentJoiner.joining(", ", null, "."));
 
-        player.spigot().sendMessage(message);
+            player.spigot().sendMessage(message);
+        }
     }
 
     protected TextComponent buildFriend(String friendDisplayName, UUID uuid) {
@@ -247,7 +277,7 @@ public class Philios extends WyPlugin {
         public Text onlineFriends;
         public Text youHaveNoOnlineFriends;
         public Text offlineFriends;
-
+        public Text youHaveNoOfflineFriends;
 
         public Texts(I18n i18n) {
             super(i18n, "texts");
@@ -262,6 +292,7 @@ public class Philios extends WyPlugin {
             this.onlineFriends = this.get("onlineFriends").asInformation();
             this.youHaveNoOnlineFriends = this.get("youHaveNoOnlineFriends").asInformation();
             this.offlineFriends = this.get("offlineFriends").asInformation();
+            this.youHaveNoOfflineFriends = this.get("youHaveNoOfflineFriends").asInformation();
         }
     }
 

@@ -1,0 +1,19 @@
+###############################
+# Configuration for Philios #
+###############################
+
+### Philios main section
+
+# Indicates whether the online friends message should be sent to a player when he/she joins
+sendOnPlayerJoin: true
+
+### Offers
+offers:
+  # If true, allow a player to send several times the same offer to the same person (false is highly recommended).
+  allowDuplicates: false
+  # Indicates whether offers should time out
+  hasTimeout: false
+  # Sets the time out delay in ticks
+  timeout: 1200
+  # Indicates whether offers should appear in action bar or not.
+  sendToActionBar: false
