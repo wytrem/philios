@@ -1,8 +1,5 @@
 package net.wytrem.spigot.philios;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.Table;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ClickEvent;
@@ -19,28 +16,23 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.*;
-import java.util.logging.Level;
+import java.util.Collection;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class Philios extends WyPlugin implements Listener {
-
-    public static final String DELIMITER_IN_SAVED_FILE = " <-> ";
     public static Philios instance;
-    public Texts texts;
 
+    // Services
+    public Texts texts;
     public FriendOffersManager offers;
-    private Table<UUID, UUID, Boolean> friendshipTable;
+    private Friendships friendships;
+
+    // Commands
     private Command removeCommand;
 
-    // --- Config
+    // Config
     private boolean sendOnPlayerJoin;
 
     @Override
@@ -72,14 +64,9 @@ public class Philios extends WyPlugin implements Listener {
 
         this.commands.register(command, "friend");
 
-        // Load saved data
-        this.friendshipTable = HashBasedTable.create();
-
-        try {
-            this.loadSavedData();
-        } catch (IOException e) {
-            this.getLogger().log(Level.WARNING, "Could not read saved friendships.", e);
-        }
+        // Friendships
+        this.friendships = new Friendships(this);
+        this.enableService(this.friendships);
 
         // Load config
         this.sendOnPlayerJoin = this.getConfig().getBoolean("sendOnPlayerJoin", true);
@@ -88,52 +75,12 @@ public class Philios extends WyPlugin implements Listener {
     @Override
     public void onDisable() {
         super.onDisable();
-        try {
-            this.saveData();
-        } catch (IOException e) {
-            this.getLogger().log(Level.WARNING, "Could not save friendships.", e);
-        }
-        this.friendshipTable.clear();
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         if (this.sendOnPlayerJoin) {
             this.sendOnlineFriends(event.getPlayer());
-        }
-    }
-
-    private void loadSavedData() throws IOException {
-        File saved = new File(this.getDataFolder(), "friendships.txt");
-
-        if (saved.exists()) {
-            Files.lines(saved.toPath())
-                    .forEach(line -> {
-                String[] split = line.split(DELIMITER_IN_SAVED_FILE);
-                if (split.length == 2) {
-                    this.friendshipTable.put(UUID.fromString(split[0]), UUID.fromString(split[1]), Boolean.TRUE);
-                } else {
-                    throw new IllegalStateException();
-                }
-            });
-            this.getLogger().info("Successfully loaded " + this.friendshipTable.columnKeySet().size() + " friendships.");
-        }
-    }
-
-    private void saveData() throws IOException {
-        File saved = new File(this.getDataFolder(), "friendships.txt");
-
-        if (saved.exists()) {
-            saved.delete();
-        }
-        if (saved.createNewFile()) {
-            BufferedWriter bufferedWriter = Files.newBufferedWriter(saved.toPath(), StandardCharsets.UTF_8);
-            String content = this.friendshipTable.cellSet().stream()
-                    .map(cell -> cell.getColumnKey().toString() + DELIMITER_IN_SAVED_FILE + cell.getRowKey().toString())
-                    .collect(Collectors.joining("\n"));
-            bufferedWriter.write(content);
-            bufferedWriter.close();
-            this.getLogger().info("Successfully saved " + this.friendshipTable.columnKeySet().size() + " friendships.");
         }
     }
 
@@ -150,7 +97,7 @@ public class Philios extends WyPlugin implements Listener {
     }
 
     protected void sendOnlineFriends(Player player) {
-        Collection<UUID> onlineFriends = this.getFriends(player).stream().filter(this::isOnline).collect(Collectors.toList());
+        Collection<UUID> onlineFriends = this.friendships.getFriends(player).stream().filter(this::isOnline).collect(Collectors.toList());
 
         if (onlineFriends.isEmpty()) {
             this.texts.youHaveNoOnlineFriends.send(player);
@@ -167,7 +114,7 @@ public class Philios extends WyPlugin implements Listener {
     }
 
     protected void sendOfflineFriends(Player player) {
-        Collection<UUID> offlineFriends = this.getFriends(player).stream().filter(x -> !this.isOnline(x)).collect(Collectors.toList());
+        Collection<UUID> offlineFriends = this.friendships.getFriends(player).stream().filter(x -> !this.isOnline(x)).collect(Collectors.toList());
 
         if (offlineFriends.isEmpty()) {
             this.texts.youHaveNoOfflineFriends.send(player);
@@ -207,8 +154,8 @@ public class Philios extends WyPlugin implements Listener {
                     Player source = (Player) context.source;
                     UUID uuid = context.args.requireOne("uuid");
 
-                    if (this.areFriends(source.getUniqueId(), uuid)) {
-                        this.removeFriendship(source.getUniqueId(), uuid);
+                    if (this.friendships.areFriends(source.getUniqueId(), uuid)) {
+                        this.friendships.removeFriendship(source.getUniqueId(), uuid);
 
                         this.texts.youAreNotFriendWithOtherAnymore.format("player", getDisplayName(uuid)).send(source);
                         this.getOnline(uuid).ifPresent(this.texts.otherIsNoLongerFriendWithYou.format("player", source)::send);
@@ -233,35 +180,6 @@ public class Philios extends WyPlugin implements Listener {
 
     protected Optional<Player> getOnline(UUID uuid) {
         return Optional.ofNullable(Bukkit.getPlayer(uuid));
-    }
-
-    public Collection<UUID> getFriends(Player player) {
-        return this.getFriends(player.getUniqueId());
-    }
-    public Collection<UUID> getFriends(UUID player) {
-        return this.friendshipTable.column(player).keySet();
-    }
-
-    public void addFriendship(UUID some, UUID other) {
-        this.friendshipTable.put(some, other, Boolean.TRUE);
-        this.friendshipTable.put(other, some, Boolean.TRUE);
-    }
-
-    public void removeFriendship(UUID some, UUID other) {
-        this.friendshipTable.remove(some, other);
-        this.friendshipTable.remove(other, some);
-    }
-
-    public boolean areFriends(Player some, Player other) {
-        return this.areFriends(some.getUniqueId(), other.getUniqueId());
-    }
-
-    public boolean areFriends(UUID some, UUID other) {
-        Preconditions.checkNotNull(some);
-        Preconditions.checkNotNull(other);
-        Preconditions.checkArgument(!some.equals(other));
-
-        return this.friendshipTable.contains(some, other);
     }
 
     @Override
