@@ -16,7 +16,7 @@ public class FriendOffersManager extends OffersManager<FriendOffer> {
 
     @Override
     public void post(FriendOffer offer) {
-        if (Philios.instance.areFriends(offer.getSender(), offer.getRecipient())) {
+        if (Philios.instance.getFriendships().areFriends(offer.getSender(), offer.getRecipient())) {
             Philios.instance.texts.youAreAlreadyFriendWithOther.format("player", offer.getRecipient()).send(offer.getSender());
         }
         else {

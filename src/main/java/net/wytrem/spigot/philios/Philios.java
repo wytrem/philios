@@ -72,9 +72,8 @@ public class Philios extends WyPlugin implements Listener {
         this.sendOnPlayerJoin = this.getConfig().getBoolean("sendOnPlayerJoin", true);
     }
 
-    @Override
-    public void onDisable() {
-        super.onDisable();
+    public Friendships getFriendships() {
+        return friendships;
     }
 
     @EventHandler

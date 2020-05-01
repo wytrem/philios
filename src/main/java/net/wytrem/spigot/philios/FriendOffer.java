@@ -10,6 +10,6 @@ public class FriendOffer extends Offer {
 
     @Override
     public void accepted() {
-        Philios.instance.addFriendship(this.getSender().getUniqueId(), this.getRecipient().getUniqueId());
+        Philios.instance.getFriendships().addFriendship(this.getSender().getUniqueId(), this.getRecipient().getUniqueId());
     }
 }

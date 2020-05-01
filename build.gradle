@@ -1,12 +1,23 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
 plugins {
     id "java"
     id "com.github.johnrengelman.shadow" version "5.1.0"
 }
 
 group 'net.wytrem.spigot'
-version '1.0'
+version '1.1'
+description = 'Friendships manager for spigot.'
 
-sourceCompatibility = 1.8
+String mainPackage = project.group + '.' + project.name.toLowerCase()
+String apiVersion = '1.14'
+String author = 'wytrem'
+String website = 'https://www.spigotmc.org/resources/philios.78164/'
+
+tasks.compileJava.sourceCompatibility = 1.8
+tasks.compileJava.targetCompatibility = 1.8
+tasks.compileJava.options.encoding = 'UTF-8'
+
 
 repositories {
     mavenCentral()
@@ -27,6 +38,21 @@ dependencies {
 //    compileOnly 'org.spigotmc:spigot:1.15.2-R0.1-SNAPSHOT' // The full Spigot server with no shadowing. Requires mavenLocal.
 //    compileOnly 'org.bukkit:craftbukkit:1.14.4-R0.1-SNAPSHOT' // The full CraftBukkit server with no shadowing. Requires mavenLocal.
 }
+
+tasks.jar.enabled = false
+
+tasks.processResources {
+    filter ReplaceTokens, tokens: [
+            "name"       : project.name,
+            "mainPackage": mainPackage,
+            "version"    : project.version,
+            "apiVersion" : apiVersion,
+            "description": project.description,
+            "author"     : author,
+            "website"    : website
+    ]
+}
+
 
 shadowJar {
     relocate "net.wytrem.spigot.utils", "net.wytrem.spigot.philios.utils"

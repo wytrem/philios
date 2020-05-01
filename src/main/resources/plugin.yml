@@ -1,8 +1,10 @@
-main: net.wytrem.spigot.philios.Philios
-name: Philios
-version: 1.0
-author: wytrem
-api-version: "1.14"
+name: @name@
+main: @mainPackage@.@name@
+version: @version@
+api-version: @apiVersion@
+description: @description@
+author: @author@
+website: @website@
 commands:
   friend:
     description: Manage friendships
